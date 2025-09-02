@@ -3,7 +3,7 @@ name: Build Flutter APK
 on:
   push:
     branches:
-      - main   # जब भी main branch पर code push होगा APK बनेगा
+      - main
 
 jobs:
   build:
@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4   # नया version
 
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.0'   # Stable version डाल रहे हैं
+          flutter-version: '3.19.0'
 
       - name: Install dependencies
         run: flutter pub get
@@ -25,7 +25,7 @@ jobs:
         run: flutter build apk --release
 
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4   # v4 इस्तेमाल करना है
         with:
           name: app-release
           path: build/app/outputs/flutter-apk/app-release.apk
