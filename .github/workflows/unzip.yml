@@ -1,10 +1,7 @@
-name: Unzip Android Folder
+name: Unzip Project
 
 on:
-  workflow_dispatch:   # Manual run option in Actions tab
-  push:
-    paths:
-      - "android_fixed_v2.zip"
+  workflow_dispatch:   # Actions tab me "Run workflow" button show karega
 
 jobs:
   unzip:
@@ -13,16 +10,15 @@ jobs:
       - name: Checkout Repo
         uses: actions/checkout@v4
 
-      - name: Unzip android_fixed_v2.zip
+      - name: Unzip astro_app.zip
         run: |
-          rm -rf android
-          unzip -o android_fixed_v2.zip -d .
-          ls -R android
+          unzip -o astro_app.zip -d .
+          ls -R .
 
       - name: Commit Unzipped Files
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add android
-          git commit -m "Added android folder from android_fixed_v2.zip" || echo "No changes to commit"
+          git add .
+          git commit -m "Unzipped astro_app project" || echo "No changes to commit"
           git push
