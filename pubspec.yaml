@@ -1,5 +1,5 @@
 name: astro_app
-description: A new Flutter project
+description: A new Flutter project for Astro App.
 
 publish_to: 'none'
 
@@ -11,13 +11,11 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  cupertino_icons: ^1.0.6
+  cupertino_icons: ^1.0.8
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
 
 flutter:
   uses-material-design: true

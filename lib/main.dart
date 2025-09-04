@@ -10,31 +10,21 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Astro App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const HomeScreen(),
+      title: 'Flutter Demo',
+      theme: ThemeData(primarySwatch: Colors.blue),
+      home: const MyHomePage(),
     );
   }
 }
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key});
+class MyHomePage extends StatelessWidget {
+  const MyHomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Astro App"),
-      ),
-      body: const Center(
-        child: Text(
-          "Welcome to Astro App 🚀",
-          style: TextStyle(fontSize: 20),
-        ),
-      ),
+      appBar: AppBar(title: const Text("Astro App")),
+      body: const Center(child: Text("Hello from Astro App!")),
     );
   }
 }
