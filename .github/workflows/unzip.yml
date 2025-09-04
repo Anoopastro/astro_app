@@ -1,0 +1,23 @@
+name: Unzip Android Folder
+
+on:
+  workflow_dispatch:
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Unzip android folder
+        run: |
+          unzip android_visible_folder.zip -d .
+          rm android_visible_folder.zip
+
+      - name: Commit extracted android folder
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android
+          git commit -m "Add android folder from ZIP"
+          git push
