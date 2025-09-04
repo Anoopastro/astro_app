@@ -15,9 +15,12 @@ jobs:
           unzip -o astro_app.zip -d tmp_dir
           # agar andar astro_app folder nikle to uske contents ko upar move karo
           if [ -d tmp_dir/astro_app ]; then
+            # Pehle purane folders hata do taki conflict na ho
+            rm -rf android ios lib test pubspec.yaml README.md .gitignore
             mv tmp_dir/astro_app/* .
             rm -rf tmp_dir
           else
+            rm -rf android ios lib test pubspec.yaml README.md .gitignore
             mv tmp_dir/* .
             rm -rf tmp_dir
           fi
