@@ -15,13 +15,19 @@ jobs:
 
       - name: Unzip android_v2.zip
         run: |
-          unzip -o android_v2.zip -d .
+          unzip -o android_v2.zip -d tmp_android
           rm android_v2.zip
 
-      - name: Rename folder to android
+      - name: Move android folder
         run: |
           rm -rf android
-          mv android_v2 android
+          # अगर zip में direct android folder है
+          if [ -d tmp_android/android ]; then
+            mv tmp_android/android android
+          else
+            # वरना जो भी folder है उसे android नाम दे दो
+            mv tmp_android/* android
+          fi
 
       - name: Commit extracted android folder
         run: |
