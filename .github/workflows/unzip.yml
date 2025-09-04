@@ -1,13 +1,13 @@
 name: Unzip Android Folder
 
 on:
-  workflow_dispatch:   # Manual run button
+  workflow_dispatch:
 
 jobs:
   unzip-android:
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # allow pushing files
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -17,6 +17,11 @@ jobs:
         run: |
           unzip -o android_v2.zip -d .
           rm android_v2.zip
+
+      - name: Rename folder to android
+        run: |
+          rm -rf android
+          mv android_v2 android
 
       - name: Commit extracted android folder
         run: |
