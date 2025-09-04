@@ -157,9 +157,9 @@ class _FeatureScreenState extends State<FeatureScreen>
   bool loading = true;
   late TabController _tabController;
 
-  final String clientId = 'YOUR_CLIENT_ID'; // <-- Replace with your Prokerala ID
+  final String clientId = '26eb97c3-7cbb-4df1-90e0-a84edf49043d'; // <-- Replace with your Prokerala ID
   final String clientSecret =
-      'YOUR_CLIENT_SECRET'; // <-- Replace with your Prokerala secret
+      'E0ytDZ3fBCRx3Gi0q3PeMbI5gpevfY6v986FQWmx'; // <-- Replace with your Prokerala secret
   String? accessToken;
 
   @override
