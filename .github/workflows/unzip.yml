@@ -1,0 +1,28 @@
+name: Unzip Android Folder
+
+on:
+  workflow_dispatch:   # Manual run option in Actions tab
+  push:
+    paths:
+      - "android_fixed_v2.zip"
+
+jobs:
+  unzip:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: Unzip android_fixed_v2.zip
+        run: |
+          rm -rf android
+          unzip -o android_fixed_v2.zip -d .
+          ls -R android
+
+      - name: Commit Unzipped Files
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android
+          git commit -m "Added android folder from android_fixed_v2.zip" || echo "No changes to commit"
+          git push
