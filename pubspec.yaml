@@ -1,6 +1,6 @@
-name: anoopastro
-description: A personal astrology app with Panchang, Mahadasha, Antardasha, Chakras, and PDF generation.
-publish_to: 'none' # since this is a private app
+name: anoopastro_app
+description: Limited astrology app like AstroSage
+publish_to: 'none'
 version: 1.0.0+1
 
 environment:
@@ -9,26 +9,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # For HTTP requests to Prokerala API
   http: ^1.1.0
-
-  # For PDF generation
   pdf: ^3.11.0
   printing: ^5.10.0
-
-  # For UI enhancements (optional, but included for better cards and icons)
-  flutter_svg: ^2.0.7
+  flutter_svg: ^2.2.1
   cupertino_icons: ^1.0.5
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^2.0.0
-
-flutter:
-  uses-material-design: true
-
-  assets:
-    # You can add any images/icons you want to include
-    - assets/images/
