@@ -1,30 +1,51 @@
 name: Flutter Build
 
 on:
-  workflow_dispatch:   # Manual run button
+  workflow_dispatch:   # Actions tab se manual run
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup Flutter
+      - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.22.0'   # you can change to your version
-          channel: 'stable'
+          flutter-version: "3.22.0"   # latest stable version
+
+      - name: Create fresh Flutter project
+        run: |
+          rm -rf astro_app
+          flutter create -t app astro_app
+          # apna code aur pubspec.yaml naya project me copy karna
+          rm -rf astro_app/lib
+          cp -r lib astro_app/lib
+          cp pubspec.yaml astro_app/
+          if [ -d test ]; then
+            rm -rf astro_app/test
+            cp -r test astro_app/test
+          fi
 
       - name: Get dependencies
-        run: flutter pub get
+        run: |
+          cd astro_app
+          flutter pub get
+
+      - name: Clean project
+        run: |
+          cd astro_app
+          flutter clean
 
       - name: Build release APK
-        run: flutter build apk --release
+        run: |
+          cd astro_app
+          flutter build apk --release
 
-      - name: Upload APK artifact
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: app-release
-          path: build/app/outputs/flutter-apk/app-release.apk
+          name: release-apk
+          path: astro_app/build/app/outputs/flutter-apk/app-release.apk
