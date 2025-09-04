@@ -1,0 +1,27 @@
+name: Unzip Android Folder
+
+on:
+  workflow_dispatch:   # Manual run button
+
+jobs:
+  unzip-android:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # allow pushing files
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unzip android_v2.zip
+        run: |
+          unzip -o android_v2.zip -d .
+          rm android_v2.zip
+
+      - name: Commit extracted android folder
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add android
+          git commit -m "Added android folder (V2 embedding)" || echo "No changes to commit"
+          git push
