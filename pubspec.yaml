@@ -1,16 +1,37 @@
-name: anoopastro_app
-description: Limited astrology app like AstroSage
+name: anoopastro_light
+description: A lightweight Kundali + Dasha + PDF demo app (AnoopAstro branding)
 publish_to: 'none'
 version: 1.0.0+1
 
+
 environment:
-  sdk: ">=2.19.0 <3.0.0"
+sdk: ">=3.3.0 <4.0.0"
+
 
 dependencies:
-  flutter:
-    sdk: flutter
-  http: ^1.1.0
-  pdf: ^3.11.0
-  printing: ^5.10.0
-  flutter_svg: ^2.1.0   # <- downgraded
-  cupertino_icons: ^1.0.5
+flutter:
+sdk: flutter
+flutter_localizations:
+sdk: flutter
+intl: ^0.19.0
+google_fonts: ^6.2.1
+shared_preferences: ^2.3.2
+uuid: ^4.4.0
+pdf: ^3.11.0
+printing: ^5.13.0
+share_plus: ^10.0.2
+timezone: ^0.9.2
+
+
+# UI niceties (optional but included)
+flutter_svg: ^2.0.10+1
+
+
+dev_dependencies:
+flutter_test:
+sdk: flutter
+flutter_lints: ^4.0.0
+
+
+flutter:
+uses-material-design: true
