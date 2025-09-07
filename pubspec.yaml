@@ -1,6 +1,6 @@
-name: anoopastro_light
-description: A light kundali app with AnoopAstro branding.
-publish_to: "none" # private app
+name: astro_app
+description: An offline kundali app with Hindi UI and PDF export
+publish_to: "none"
 
 version: 1.0.0+1
 
@@ -10,33 +10,13 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
-  # UI + Fonts
-  google_fonts: ^6.2.1
-
-  # Date formatting
-  intl: ^0.19.0
-
-  # PDF generation
-  pdf: ^3.11.0
-  printing: ^5.13.0
-
-  # For Material 3 widgets
-  flutter_localizations:
-    sdk: flutter
-
-  # Swiss Ephemeris (offline astrology calc)
-  swisseph:
-    git:
-      url: https://github.com/aloistr/swisseph.git
+  pdf: ^3.10.7
+  printing: ^5.12.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^4.0.0
+  flutter_lints: ^3.0.0
 
 flutter:
   uses-material-design: true
-
-  assets:
-    - assets/ephe/
