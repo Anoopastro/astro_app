@@ -240,8 +240,8 @@ class AstroMath {
     final hour = utc.hour +
         utc.minute / 60.0 +
         utc.second / 3600.0 +
-        utc.millisecond / 3_600_000.0 +
-        utc.microsecond / 3_600_000_000.0;
+        utc.millisecond / 3600000.0 +
+        utc.microsecond / 3600000000.0;
 
     var y = year;
     var m = month;
@@ -261,9 +261,8 @@ class AstroMath {
 
   static double Tcenturies(double jd) => (jd - 2451545.0) / 36525.0;
 
-  // Mean obliquity (arcsec) IAU 2006-ish, good enough
+  // Mean obliquity (deg)
   static double meanObliquityDeg(double T) {
-    // 23°26′21.448″ - 46.8150″T - 0.00059″T^2 + 0.001813″T^3
     final seconds =
         21.448 - 46.8150 * T - 0.00059 * T * T + 0.001813 * T * T * T;
     return 23.0 + 26.0 / 60.0 + seconds / 3600.0;
@@ -283,9 +282,7 @@ class AstroMath {
     return normalizeDegrees(gmstDeg(jd) + eastLongitudeDeg);
   }
 
-  // Lahiri (Chitra-Paksha) ayanamsa: simple linearized model around J2000
-  // ay(2000-01-01 12:00 TT) ≈ 23.8531°
-  // rate ≈ 50.290966″/yr = 0.013969157°/yr
+  // Lahiri (Chitra-Paksha) ayanamsa
   static double lahiriAyanamsaDeg(double jd) {
     final years = (jd - 2451545.0) / 365.2422;
     const ay2000 = 23.8531;
@@ -311,7 +308,6 @@ class AstroMath {
   }
 
   // Moon ecliptic longitude (tropical, degrees), compact approximation
-  // Good to ~0.5–1.0° typically.
   static double moonLongitudeTropical(double jd) {
     final T = Tcenturies(jd);
 
@@ -349,9 +345,8 @@ class AstroMath {
     final Mpr = Mp * deg2rad;
     final Fr = F * deg2rad;
 
-    // Compact series (dominant terms)
     final lambda = Lp +
-        6.289 * math.sin(Mpr) + // Evection
+        6.289 * math.sin(Mpr) + // main terms
         1.274 * math.sin(2 * Dr - Mpr) +
         0.658 * math.sin(2 * Dr) +
         0.214 * math.sin(2 * Mpr) +
@@ -388,8 +383,7 @@ class AstroMath {
     return (sum / 13.333333333333334).floor() + 1; // 1..27
   }
 
-  // Approx lagna (house 1 sign) using Local Sidereal Time (rough)
-  // This is not exact ascendant, but ok for demo.
+  // Approx lagna (house 1 sign) using Local Sidereal Time (demo)
   static (int sign, double degInSign) approxLagnaSign(double jd, double eastLonDeg) {
     final lst = lstDeg(jd, eastLonDeg); // 0..360
     final sign = signIndex(lst);
@@ -419,7 +413,6 @@ SignQuality qualityForSign(int signIndex) {
 }
 
 // Generic varga mapping: divisor = 9 (D9), 10 (D10), etc.
-// Start offsets: chara=0, sthira=+8, dwiswabhava=+4 (mod 12).
 int vargaSignIndex(int signIndex, double degInSign, int divisor) {
   final partWidth = 30.0 / divisor;
   final partIndex = (degInSign / partWidth).floor().clamp(0, divisor - 1);
@@ -497,16 +490,16 @@ class AstroEngine {
     final (lagSign, lagDeg) =
         AstroMath.approxLagnaSign(jd, input.city.lon);
 
-    // Build planets (Sun/Moon accurate; others placeholders based on time)
+    // Build planets (Sun/Moon accurate; others placeholders)
     final seed = (birth.millisecondsSinceEpoch % 360).toDouble();
     final placeholders = <double>[
-      (seed + 70) % 360, // मंगल
+      (seed + 70) % 360,  // मंगल
       (seed + 110) % 360, // बुध
       (seed + 150) % 360, // गुरु
       (seed + 190) % 360, // शुक्र
       (seed + 230) % 360, // शनि
       (seed + 270) % 360, // राहु
-      (seed + 90) % 360, // केतु
+      (seed + 90) % 360,  // केतु
     ];
 
     List<PlanetPos> planets = [
@@ -531,8 +524,8 @@ class AstroEngine {
           '${nakshatraHindi[AstroMath.nakshatraIndex(moonSid)]} (पाद ${AstroMath.padaFromSidereal(moonSid)})',
       'yoga': 'योग $yogaIdx',
       'karana': '—', // TODO
-      'sunrise': '—', // TODO: compute
-      'sunset': '—',  // TODO: compute
+      'sunrise': '—', // TODO
+      'sunset': '—',  // TODO
     };
 
     return KundaliResult(
@@ -563,7 +556,7 @@ class AstroEngine {
   }
 }
 
-// ---------- Vimshottari Dasha (starter, unchanged logic) ----------
+// ---------- Vimshottari Dasha (starter) ----------
 class DashaPeriod {
   final String maha; // Hindi
   final tz.TZDateTime start;
@@ -691,15 +684,15 @@ class PdfService {
     final doc = pw.Document();
 
     final headerStyle =
-        pw.TextStyle(font: ttf, fontSize: 18, color: pw.PdfColors.purple);
+        pw.TextStyle(font: ttf, fontSize: 18, color: pwf.PdfColors.purple);
     final normal = pw.TextStyle(font: ttf, fontSize: 12);
     final small =
-        pw.TextStyle(font: ttf, fontSize: 10, color: pw.PdfColors.grey700);
+        pw.TextStyle(font: ttf, fontSize: 10, color: pwf.PdfColors.grey700);
 
     // Page 1: Birth details
     doc.addPage(
       pw.Page(
-        pageFormat: pw.PdfPageFormat.a4,
+        pageFormat: pwf.PdfPageFormat.a4,
         build: (ctx) {
           return pw.Container(
             padding: const pw.EdgeInsets.all(24),
@@ -711,7 +704,7 @@ class PdfService {
                   children: [
                     pw.Text(appBrand,
                         style: headerStyle.copyWith(
-                            color: pw.PdfColors.deepPurple)),
+                            color: pwf.PdfColors.deepPurple)),
                     pw.Text('© $appBrand', style: small),
                   ],
                 ),
@@ -754,7 +747,7 @@ class PdfService {
     // Page 2: D1 chart + planets
     doc.addPage(
       pw.Page(
-        pageFormat: pw.PdfPageFormat.a4,
+        pageFormat: pwf.PdfPageFormat.a4,
         build: (ctx) {
           return pw.Container(
             padding: const pw.EdgeInsets.all(24),
@@ -772,7 +765,7 @@ class PdfService {
                         width: 240,
                         height: 240,
                         decoration: pw.BoxDecoration(
-                          border: pw.Border.all(color: pw.PdfColors.grey600),
+                          border: pw.Border.all(color: pwf.PdfColors.grey600),
                         ),
                         child:
                             pw.Image(pw.MemoryImage(chartD1), fit: pw.BoxFit.cover),
@@ -812,7 +805,7 @@ class PdfService {
     if (chartD9 != null || chartD10 != null) {
       doc.addPage(
         pw.Page(
-          pageFormat: pw.PdfPageFormat.a4,
+          pageFormat: pwf.PdfPageFormat.a4,
           build: (ctx) {
             return pw.Container(
               padding: const pw.EdgeInsets.all(24),
@@ -832,7 +825,7 @@ class PdfService {
                               pw.Container(
                                 height: 240,
                                 decoration: pw.BoxDecoration(
-                                  border: pw.Border.all(color: pw.PdfColors.grey600),
+                                  border: pw.Border.all(color: pwf.PdfColors.grey600),
                                 ),
                                 child: pw.Image(pw.MemoryImage(chartD9), fit: pw.BoxFit.contain),
                               ),
@@ -849,7 +842,7 @@ class PdfService {
                               pw.Container(
                                 height: 240,
                                 decoration: pw.BoxDecoration(
-                                  border: pw.Border.all(color: pw.PdfColors.grey600),
+                                  border: pw.Border.all(color: pwf.PdfColors.grey600),
                                 ),
                                 child: pw.Image(pw.MemoryImage(chartD10), fit: pw.BoxFit.contain),
                               ),
@@ -870,7 +863,7 @@ class PdfService {
     if (dashaRows != null && dashaRows.isNotEmpty) {
       doc.addPage(
         pw.Page(
-          pageFormat: pw.PdfPageFormat.a4,
+          pageFormat: pwf.PdfPageFormat.a4,
           build: (ctx) {
             return pw.Container(
               padding: const pw.EdgeInsets.all(24),
@@ -997,7 +990,7 @@ class NorthIndianChartPainter extends CustomPainter {
     canvas.drawLine(Offset(size.width, size.height), midBottom, paintGrid);
 
     // Draw house labels and planets
-    final textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final textPainter = TextPainter(textDirection: ui.TextDirection.ltr);
     final anchors = _houseAnchors(size); // indices 1..12
     for (int house = 1; house <= 12; house++) {
       final pos = anchors[house]!;
@@ -1306,8 +1299,7 @@ class _CreateKundaliPageState extends ConsumerState<CreateKundaliPage> {
   Future<void> _onCityChanged(String text) async {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 180), () async {
-      final dbAsync = ref.read(cityDbProvider);
-      final db = await dbAsync.future;
+      final db = await ref.read(cityDbProvider.future);
       final results = await db.search(text, limit: 20);
       if (!mounted) return;
       setState(() {
@@ -1805,7 +1797,7 @@ class SettingsPage extends ConsumerWidget {
           leading: const Icon(Icons.language),
           title: const Text('Language'),
           subtitle:
-              Text(locale.languageCode == 'hi' ? 'Hindi (हिंदी)' : 'English'),
+              Text(locale.languageCode == 'hi' ? 'Hindi (হिंदी)' : 'English'),
           onTap: () async {
             final sel = await showModalBottomSheet<Locale>(
               context: context,
