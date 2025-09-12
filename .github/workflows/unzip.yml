@@ -1,35 +1,21 @@
-name: Unzip Project
+name: Unzip Astro App
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # Run manually
 
 jobs:
   unzip:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
-
-      - name: Unzip astro_app.zip
+      - uses: actions/checkout@v3
+      - name: Unzip astro_app(1).zip
         run: |
-          unzip -o astro_app.zip -d tmp_dir
-          # agar andar astro_app folder nikle to uske contents ko upar move karo
-          if [ -d tmp_dir/astro_app ]; then
-            # Pehle purane folders hata do taki conflict na ho
-            rm -rf android ios lib test pubspec.yaml README.md .gitignore
-            mv tmp_dir/astro_app/* .
-            rm -rf tmp_dir
-          else
-            rm -rf android ios lib test pubspec.yaml README.md .gitignore
-            mv tmp_dir/* .
-            rm -rf tmp_dir
-          fi
-          ls -R .
-
-      - name: Commit Unzipped Files
+          unzip "astro_app(1).zip" -d .
+          rm "astro_app(1).zip"
+      - name: Commit unzipped files
         run: |
           git config user.name "github-actions"
-          git config user.email "github-actions@github.com"
+          git config user.email "actions@github.com"
           git add .
-          git commit -m "Unzipped astro_app project (flattened)" || echo "No changes to commit"
+          git commit -m "Unzipped astro_app"
           git push
