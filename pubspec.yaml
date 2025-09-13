@@ -1,5 +1,5 @@
 name: anoopastro_light
-description: A full-featured Kundali app with planetary positions, houses, and Dasha
+description: A full-featured Kundali app
 publish_to: "none"
 
 version: 1.0.0+1
@@ -11,15 +11,10 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Swiss Ephemeris Dart binding (Dart 3.4 compatible)
   sweph: ^2.10.3+18
-
-  # PDF and sharing
   pdf: ^3.11.0
   printing: ^5.12.4
-  share_plus: ^10.0.2
-
-  # Utilities
+  share_plus: ^10.1.4
   path_provider: ^2.1.5
   intl: ^0.20.2
   google_fonts: ^6.2.0
@@ -33,3 +28,4 @@ flutter:
 
   assets:
     - assets/cities/cities.json
+    - assets/ephem/ephem_1950_2050_3h.bin.gz
