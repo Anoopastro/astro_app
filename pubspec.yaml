@@ -1,6 +1,6 @@
 name: anoopastro_light
-description: A light kundali app with Swiss Ephemeris
-publish_to: "none"
+description: A full-featured Kundali app with planetary positions, houses, and Dasha
+publish_to: "none" # private app
 
 version: 1.0.0+1
 
@@ -10,10 +10,19 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  sweph: ^0.0.6       # Swiss Ephemeris Dart binding
-  share_plus: ^10.0.2 # for PDF sharing
-  path_provider: ^2.1.5
+
+  # Swiss Ephemeris Dart binding for accurate planetary positions
+  sweph: ^0.0.6
+
+  # For PDF generation and sharing
   pdf: ^3.11.0
+  printing: ^5.12.4
+  share_plus: ^10.0.2
+
+  # Utilities
+  path_provider: ^2.1.5
+  intl: ^0.20.2
+  google_fonts: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -24,3 +33,5 @@ flutter:
 
   assets:
     - assets/cities/cities.json
+    # You can include ephemeris files if you still want your own bin.gz files
+    # - assets/ephem/ephem_1950_2050_3h.bin.gz
