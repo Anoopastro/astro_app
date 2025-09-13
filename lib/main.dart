@@ -10,7 +10,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final ephem = EphemerisProvider();
-  await ephem.init();
+  await ephem.loadFromAsset('assets/ephem/ephem_1950_2050_3h.bin.gz');
 
   final locProvider = LocationProvider();
   await locProvider.loadCities('assets/cities/cities.json');
@@ -57,50 +57,39 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     final cityCoords = widget.locProvider.getCoordinates(city)!;
     final jd = julianDayUtc(birthDate.toUtc());
+    final planets = widget.ephem.calculatePlanets(jd);
+    final houses = widget.ephem.calculateHouses(jd, cityCoords['lat']!, cityCoords['lon']!);
+    final dasha = DashaProvider().computeVimshottari(jd, planets['Moon'] ?? 0);
 
-    return FutureBuilder(
-      future: Future.wait([
-        widget.ephem.allPlanetsAt(jd),
-        widget.ephem.calculateHouses(jd, cityCoords['lat']!, cityCoords['lon']!),
-      ]),
-      builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return const Scaffold(body: Center(child: CircularProgressIndicator()));
-        }
-        final planets = snapshot.data![0] as Map<String, double>;
-        final houses = snapshot.data![1] as Map<String, double>;
-        final dasha = DashaProvider().computeVimshottari(jd, planets['Moon'] ?? 0);
-
-        return Scaffold(
-          appBar: AppBar(title: const Text("Anoopastro Kundali")),
-          body: SingleChildScrollView(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              children: [
-                Text("Birth: $city\nDate: $birthDate", style: const TextStyle(fontSize: 16)),
-                const SizedBox(height: 10),
-                ChartDrawer(planets: planets, houses: houses).buildChart(),
-                const SizedBox(height: 20),
-                Text("Vimshottari Dasha", style: Theme.of(context).textTheme.titleLarge),
-                for (var entry in dasha) Text(entry),
-                const SizedBox(height: 20),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.picture_as_pdf),
-                  label: const Text("Export PDF"),
-                  onPressed: () async {
-                    final pdf = await PdfGenerator.generateKundaliPdf(
-                      planets: planets,
-                      city: city,
-                      birthDate: birthDate,
-                    );
-                    await PdfGenerator.saveAndShare(pdf);
-                  },
-                )
-              ],
-            ),
-          ),
-        );
-      },
+    return Scaffold(
+      appBar: AppBar(title: const Text("Anoopastro Kundali")),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            Text("Birth: $city\nDate: $birthDate", style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 10),
+            ChartDrawer(planets: planets, houses: houses).buildChart(),
+            const SizedBox(height: 20),
+            Text("Vimshottari Dasha", style: Theme.of(context).textTheme.titleLarge),
+            for (var entry in dasha) Text(entry),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.picture_as_pdf),
+              label: const Text("Export PDF"),
+              onPressed: () async {
+                final pdf = await PdfGenerator.generateKundaliPdf(
+                  planets: planets,
+                  city: city,
+                  birthDate: birthDate,
+                  houses: houses,
+                );
+                await PdfGenerator.saveAndShare(pdf);
+              },
+            )
+          ],
+        ),
+      ),
     );
   }
 }
