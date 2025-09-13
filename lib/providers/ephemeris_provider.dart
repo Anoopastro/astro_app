@@ -1,51 +1,89 @@
-import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 import 'dart:typed_data';
-
-import 'package:flutter/services.dart';
+import 'package:flutter/services.dart' show rootBundle;
+import 'package:archive/archive.dart';
 
 class EphemerisProvider {
-  static final EphemerisProvider _instance = EphemerisProvider._internal();
-  factory EphemerisProvider() => _instance;
-  EphemerisProvider._internal();
-
   late Float64List _data;
   bool _isLoaded = false;
+
+  late double _jdStart;
+  late double _jdEnd;
+  late double _step; // step in days (0.125 = 3h)
+  static const int _planetCount = 9; // Sun..Ketu
 
   Future<void> load() async {
     if (_isLoaded) return;
 
-    // load compressed binary file from assets
-    final byteData = await rootBundle.load('assets/ephem/ephem_1950_2050.gz');
-    final List<int> compressed = byteData.buffer.asUint8List();
+    try {
+      final compressed = await rootBundle.load('assets/ephem/ephem_1950_2050_3h.bin.gz');
+      final bytes = compressed.buffer.asUint8List();
 
-    // decompress (example using gzip decoder)
-    final List<int> decompressed = gzip.decode(compressed);
+      // decompress gzip
+      final raw = GZipDecoder().decodeBytes(bytes);
 
-    // ✅ convert to Uint8List (TypedData)
-    final Uint8List decompressedBytes = Uint8List.fromList(decompressed);
+      // convert to doubles
+      final bd = ByteData.sublistView(Uint8List.fromList(raw));
+      _data = bd.buffer.asFloat64List();
 
-    // ✅ safe: sublistView works on Uint8List
-    final bd = ByteData.sublistView(decompressedBytes);
+      // first 3 doubles = metadata
+      _jdStart = _data[0];
+      _jdEnd = _data[1];
+      _step = _data[2]; // in days
 
-    // Example offset / length (adjust according to your binary format)
-    const int offset = 0;
-    final int expected = bd.lengthInBytes;
+      _isLoaded = true;
+      print("✅ Ephemeris loaded: $_jdStart → $_jdEnd step=$_step");
 
-    // ✅ safe: buffer exists on Uint8List
-    _data = decompressedBytes.buffer.asFloat64List(offset, expected ~/ 8);
-
-    _isLoaded = true;
+    } catch (e) {
+      print("❌ Failed to load ephemeris: $e");
+      rethrow;
+    }
   }
 
-  double getValue(int index) {
-    if (!_isLoaded) {
-      throw StateError("Ephemeris data not loaded yet. Call load() first.");
+  /// return {planetName: longitude}
+  Map<String, double> allPlanetsAt(double jd) {
+    if (!_isLoaded) throw StateError("Ephemeris not loaded!");
+
+    final planets = <String, double>{};
+    final names = ["Sun", "Moon", "Mars", "Mercury", "Jupiter", "Venus", "Saturn", "Rahu", "Ketu"];
+
+    for (int i = 0; i < _planetCount; i++) {
+      planets[names[i]] = getPlanetAt(i, jd);
     }
-    if (index < 0 || index >= _data.length) {
-      throw RangeError("Index $index out of range (0..${_data.length - 1})");
+    return planets;
+  }
+
+  double getPlanetAt(int planetIndex, double jd) {
+    if (!_isLoaded) throw StateError("Ephemeris not loaded!");
+    if (jd < _jdStart || jd > _jdEnd) {
+      throw RangeError("JD $jd outside ephemeris range ($_jdStart - $_jdEnd)");
     }
-    return _data[index];
+
+    final recordSize = _planetCount;
+    final header = 3; // metadata count
+    final stepDays = _step;
+
+    // nearest index
+    final index = ((jd - _jdStart) / stepDays).floor();
+    final idx1 = header + index * recordSize + planetIndex;
+    final idx2 = idx1 + recordSize;
+
+    if (idx2 >= _data.length) return _normalize360(_data[idx1]);
+
+    final t1 = _jdStart + index * stepDays;
+    final t2 = t1 + stepDays;
+
+    final v1 = _data[idx1];
+    final v2 = _data[idx2];
+
+    final frac = (jd - t1) / (t2 - t1);
+
+    // linear interpolation + normalize
+    return _normalize360(v1 + (v2 - v1) * frac);
+  }
+
+  double _normalize360(double v) {
+    var res = v % 360.0;
+    if (res < 0) res += 360.0;
+    return res;
   }
 }
