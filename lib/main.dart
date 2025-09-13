@@ -10,6 +10,8 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final ephem = EphemerisProvider();
+  await ephem.init();
+
   final locProvider = LocationProvider();
   await locProvider.loadCities('assets/cities/cities.json');
 
@@ -53,21 +55,20 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final cityCoords = widget.locProvider.getCoordinates(city)!; // null check
+    final cityCoords = widget.locProvider.getCoordinates(city)!;
     final jd = julianDayUtc(birthDate.toUtc());
 
     return FutureBuilder(
       future: Future.wait([
         widget.ephem.allPlanetsAt(jd),
-        widget.ephem.calculateHouses(jd, cityCoords['lat']!, cityCoords['lon']!)
+        widget.ephem.calculateHouses(jd, cityCoords['lat']!, cityCoords['lon']!),
       ]),
       builder: (context, snapshot) {
         if (!snapshot.hasData) {
           return const Scaffold(body: Center(child: CircularProgressIndicator()));
         }
-
         final planets = snapshot.data![0] as Map<String, double>;
-        final houses = snapshot.data![1] as List<double>;
+        final houses = snapshot.data![1] as Map<String, double>;
         final dasha = DashaProvider().computeVimshottari(jd, planets['Moon'] ?? 0);
 
         return Scaffold(
