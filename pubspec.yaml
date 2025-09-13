@@ -1,5 +1,5 @@
 name: anoopastro_light
-description: A full-featured Kundali app
+description: A light kundali app with AnoopAstro branding.
 publish_to: "none"
 
 version: 1.0.0+1
@@ -11,21 +11,23 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Core packages
+  async: ^2.11.0
+  collection: ^1.18.0
+  google_fonts: ^6.3.0
+  path_provider: ^2.4.2
+  http: ^1.1.0
   sweph: ^2.10.3+18
-  pdf: ^3.11.0
-  printing: ^5.12.4
   share_plus: ^10.1.4
-  path_provider: ^2.1.5
-  intl: ^0.20.2
-  google_fonts: ^6.2.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  flutter_lints: ^2.0.0
 
 flutter:
   uses-material-design: true
 
   assets:
     - assets/cities/cities.json
-    - assets/ephem/ephem_1950_2050_3h.bin.gz
+    - assets/ephem/
