@@ -11,15 +11,15 @@ dependencies:
   flutter:
     sdk: flutter
 
-  # Swiss Ephemeris Dart binding
-  sweph: ^3.2.1+2.10.3
+  # Swiss Ephemeris Dart binding (Dart 3.4 compatible)
+  sweph: ^2.10.3+18
 
   # PDF and sharing
   pdf: ^3.11.0
   printing: ^5.12.4
   share_plus: ^10.0.2
 
-  # Utilities (Dart 3.4.0 compatible versions)
+  # Utilities
   path_provider: ^2.1.5
   intl: ^0.20.2
   google_fonts: ^6.2.0
