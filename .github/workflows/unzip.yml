@@ -1,27 +1,31 @@
 name: Unzip astro_app.zip into repo
 
 on:
-  workflow_dispatch:   # manually run from Actions tab
+  workflow_dispatch:   # आप Actions tab से manual run कर सकते हैं
 
 jobs:
   unzip:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}   # default token, required for push
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Install 7zip
         run: |
           sudo apt-get update -y
           sudo apt-get install -y p7zip-full
 
+      - name: Remove old astro_app folder (if exists)
+        run: rm -rf astro_app
+
       - name: Extract astro_app.zip
         run: |
-          ZIPNAME=$(ls astro_app*.zip | head -n 1)
+          ZIPNAME=$(ls astro_app*.zip | head -n 1)   # find first astro_app*.zip
           echo "Unzipping $ZIPNAME ..."
-          7z x "$ZIPNAME" -o. -y   # '.' = current repo root
+          7z x "$ZIPNAME" -o. -y    # extract into repo root (will create astro_app/)
 
       - name: Configure git
         run: |
@@ -31,8 +35,7 @@ jobs:
       - name: Commit unzipped files
         run: |
           git add .
-          git commit -m "Unzip $ZIPNAME into repo" || echo "No changes to commit"
+          git commit -m "Unzip astro_app.zip into repo" || echo "No changes to commit"
 
       - name: Push changes
-        run: |
-          git push
+        run: git push
