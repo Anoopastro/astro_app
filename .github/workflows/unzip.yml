@@ -1,12 +1,11 @@
-name: Unzip astro_app.zip into repo
+name: Unzip and Fix astro_app structure
 
 on:
-  workflow_dispatch:   # आप Actions tab से manual run कर सकते हैं
+  workflow_dispatch:
 
 jobs:
   unzip:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
@@ -18,24 +17,33 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y p7zip-full
 
-      - name: Remove old astro_app folder (if exists)
+      - name: Remove old astro_app
         run: rm -rf astro_app
 
       - name: Extract astro_app.zip
         run: |
-          ZIPNAME=$(ls astro_app*.zip | head -n 1)   # find first astro_app*.zip
+          ZIPNAME=$(ls astro_app*.zip | head -n 1)
           echo "Unzipping $ZIPNAME ..."
-          7z x "$ZIPNAME" -o. -y    # extract into repo root (will create astro_app/)
+          7z x "$ZIPNAME" -o. -y
+
+      - name: Flatten astro_app folder
+        run: |
+          if [ -d "astro_app/astro_app" ]; then
+            echo "Fixing nested astro_app/astro_app..."
+            mv astro_app/astro_app/* astro_app/
+            mv astro_app/astro_app/.[!.]* astro_app/ || true
+            rm -rf astro_app/astro_app
+          fi
 
       - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Commit unzipped files
+      - name: Commit changes
         run: |
           git add .
-          git commit -m "Unzip astro_app.zip into repo" || echo "No changes to commit"
+          git commit -m "Fix astro_app structure (remove nested folder)" || echo "No changes to commit"
 
       - name: Push changes
         run: git push
