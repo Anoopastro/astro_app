@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:sweph/sweph.dart'; // Swiss Ephemeris binding
+import 'providers/ephemeris_provider.dart';
 import 'providers/location_provider.dart';
 import 'providers/dasha_provider.dart';
 import 'utils/pdf_generator.dart';
@@ -9,17 +9,20 @@ import 'utils/julian.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Location provider load
+  final ephem = EphemerisProvider();
+  await ephem.init(); // पहले initialize करेंगे
+
   final locProvider = LocationProvider();
   await locProvider.loadCities('assets/cities/cities.json');
 
-  runApp(AnoopAstroApp(locProvider: locProvider));
+  runApp(AnoopAstroApp(ephem: ephem, locProvider: locProvider));
 }
 
 class AnoopAstroApp extends StatelessWidget {
+  final EphemerisProvider ephem;
   final LocationProvider locProvider;
 
-  const AnoopAstroApp({super.key, required this.locProvider});
+  const AnoopAstroApp({super.key, required this.ephem, required this.locProvider});
 
   @override
   Widget build(BuildContext context) {
@@ -31,15 +34,16 @@ class AnoopAstroApp extends StatelessWidget {
           bodyMedium: TextStyle(fontFamily: 'Roboto'),
         ),
       ),
-      home: HomePage(locProvider: locProvider),
+      home: HomePage(ephem: ephem, locProvider: locProvider),
     );
   }
 }
 
 class HomePage extends StatefulWidget {
+  final EphemerisProvider ephem;
   final LocationProvider locProvider;
 
-  const HomePage({super.key, required this.locProvider});
+  const HomePage({super.key, required this.ephem, required this.locProvider});
 
   @override
   State<HomePage> createState() => _HomePageState();
@@ -48,84 +52,87 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   DateTime birthDate = DateTime(1990, 1, 1, 12, 0);
   String city = "Delhi";
-  Map<String, double> planets = {};
-  List<String> dasha = [];
+
+  Map<String, double>? planets;
+  Map<String, double>? houses;
+  List<String>? dasha;
 
   @override
   void initState() {
     super.initState();
-    _calculateChart();
+    _calculateKundali();
   }
 
-  Future<void> _calculateChart() async {
+  Future<void> _calculateKundali() async {
     final cityCoords = widget.locProvider.getCoordinates(city);
     final jd = julianDayUtc(birthDate.toUtc());
 
-    // Calculate planetary positions with Swiss Ephemeris
-    final swe = Sweph();
-    await swe.init();
-
-    final planetNames = {
-      SweConst.SE_SUN: "Sun",
-      SweConst.SE_MOON: "Moon",
-      SweConst.SE_MERCURY: "Mercury",
-      SweConst.SE_VENUS: "Venus",
-      SweConst.SE_MARS: "Mars",
-      SweConst.SE_JUPITER: "Jupiter",
-      SweConst.SE_SATURN: "Saturn",
-      SweConst.SE_URANUS: "Uranus",
-      SweConst.SE_NEPTUNE: "Neptune",
-      SweConst.SE_PLUTO: "Pluto",
-      SweConst.SE_TRUE_NODE: "Rahu"
-    };
-
-    Map<String, double> result = {};
-    for (var entry in planetNames.entries) {
-      final pos = await swe.calcUt(jd, entry.key, SweConst.SEFLG_SWIEPH);
-      result[entry.value] = pos.longitude;
-    }
-    await swe.close();
-
-    // Compute Dasha (Moon आधारित)
-    final moonLong = result["Moon"] ?? 0.0;
-    final dashaList = DashaProvider().computeVimshottari(jd, moonLong);
+    final p = await widget.ephem.calculatePlanets(jd);
+    final h = await widget.ephem.calculateHouses(jd, cityCoords['lat'], cityCoords['lon']);
+    final d = DashaProvider().computeVimshottari(jd, p['Moon'] ?? 0);
 
     setState(() {
-      planets = result;
-      dasha = dashaList;
+      planets = p;
+      houses = h;
+      dasha = d;
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    if (planets == null || houses == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text("Anoopastro Kundali")),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Birth: $city\nDate: $birthDate",
-                style: const TextStyle(fontSize: 16)),
+            Text("Birth Place: $city\nDate: $birthDate", style: const TextStyle(fontSize: 16)),
             const SizedBox(height: 10),
-            if (planets.isNotEmpty) ChartDrawer(planets: planets).buildChart(),
+
+            /// Chart Drawing (dummy planets for now)
+            ChartDrawer(planets: planets!).buildChart(),
             const SizedBox(height: 20),
-            Text("Vimshottari Dasha",
-                style: Theme.of(context).textTheme.titleLarge),
-            for (var entry in dasha) Text(entry),
+
+            /// Show Lagna & Houses
+            Text("Ascendant & Houses", style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            for (var entry in houses!.entries)
+              Text("${entry.key}: ${entry.value.toStringAsFixed(2)}°"),
+
             const SizedBox(height: 20),
+
+            /// Show Planets
+            Text("Planets", style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 8),
+            for (var entry in planets!.entries)
+              Text("${entry.key}: ${entry.value.toStringAsFixed(2)}°"),
+
+            const SizedBox(height: 20),
+
+            /// Vimshottari Dasha
+            Text("Vimshottari Dasha", style: Theme.of(context).textTheme.titleLarge),
+            for (var entry in dasha!) Text(entry),
+
+            const SizedBox(height: 20),
+
             ElevatedButton.icon(
               icon: const Icon(Icons.picture_as_pdf),
               label: const Text("Export PDF"),
-              onPressed: planets.isEmpty
-                  ? null
-                  : () async {
-                      final pdf = await PdfGenerator.generateKundaliPdf(
-                        planets: planets,
-                        city: city,
-                        birthDate: birthDate,
-                      );
-                      await PdfGenerator.saveAndShare(pdf);
-                    },
+              onPressed: () async {
+                final pdf = await PdfGenerator.generateKundaliPdf(
+                  planets: planets!,
+                  city: city,
+                  birthDate: birthDate,
+                );
+                await PdfGenerator.saveAndShare(pdf);
+              },
             )
           ],
         ),
