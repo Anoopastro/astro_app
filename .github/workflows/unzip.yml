@@ -1,21 +1,49 @@
-name: Unzip Astro App
+name: Unzip astro_app.zip
 
 on:
-  workflow_dispatch:   # Run manually
+  workflow_dispatch:   # manual trigger from Actions tab
+  push:
+    branches:
+      - main
 
 jobs:
   unzip:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - name: Unzip astro_app(1).zip
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: List repo files (for debug)
+        run: ls -la
+
+      - name: Install p7zip
         run: |
-          unzip "astro_app(1).zip" -d .
-          rm "astro_app(1).zip"
-      - name: Commit unzipped files
+          sudo apt-get update -y
+          sudo apt-get install -y p7zip-full
+
+      - name: Ensure zip exists
         run: |
-          git config user.name "github-actions"
-          git config user.email "actions@github.com"
-          git add .
-          git commit -m "Unzipped astro_app"
-          git push
+          if [ ! -f "./astro_app.zip" ]; then
+            echo "astro_app.zip not found in repo root. Attempting to search..."
+            find . -maxdepth 4 -type f -name "astro_app*.zip" -print || true
+            exit 1
+          fi
+
+      - name: Create extract folder
+        run: |
+          mkdir -p extracted_astro_app
+
+      - name: Extract astro_app.zip with 7z
+        run: |
+          7z x astro_app.zip -oextracted_astro_app -y
+
+      - name: Show extracted files
+        run: |
+          echo "---- extracted files ----"
+          ls -la extracted_astro_app || true
+
+      - name: Upload extracted as artifact (optional)
+        uses: actions/upload-artifact@v4
+        with:
+          name: astro_app-extracted
+          path: extracted_astro_app
