@@ -1,10 +1,7 @@
-name: Unzip astro_app.zip
+name: Unzip astro_app.zip into repo
 
 on:
-  workflow_dispatch:   # manual trigger from Actions tab
-  push:
-    branches:
-      - main
+  workflow_dispatch:   # manually run from Actions tab
 
 jobs:
   unzip:
@@ -12,38 +9,30 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}   # default token, required for push
 
-      - name: List repo files (for debug)
-        run: ls -la
-
-      - name: Install p7zip
+      - name: Install 7zip
         run: |
           sudo apt-get update -y
           sudo apt-get install -y p7zip-full
 
-      - name: Ensure zip exists
+      - name: Extract astro_app.zip
         run: |
-          if [ ! -f "./astro_app.zip" ]; then
-            echo "astro_app.zip not found in repo root. Attempting to search..."
-            find . -maxdepth 4 -type f -name "astro_app*.zip" -print || true
-            exit 1
-          fi
+          ZIPNAME=$(ls astro_app*.zip | head -n 1)
+          echo "Unzipping $ZIPNAME ..."
+          7z x "$ZIPNAME" -o. -y   # '.' = current repo root
 
-      - name: Create extract folder
+      - name: Configure git
         run: |
-          mkdir -p extracted_astro_app
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Extract astro_app.zip with 7z
+      - name: Commit unzipped files
         run: |
-          7z x astro_app.zip -oextracted_astro_app -y
+          git add .
+          git commit -m "Unzip $ZIPNAME into repo" || echo "No changes to commit"
 
-      - name: Show extracted files
+      - name: Push changes
         run: |
-          echo "---- extracted files ----"
-          ls -la extracted_astro_app || true
-
-      - name: Upload extracted as artifact (optional)
-        uses: actions/upload-artifact@v4
-        with:
-          name: astro_app-extracted
-          path: extracted_astro_app
+          git push
