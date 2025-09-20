@@ -8,10 +8,8 @@ import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:sweph/sweph.dart' as sweph;
-import 'package:pdf/widgets.dart' as pw;
-import 'package:printing/printing.dart';
 
-// Import your provider
+// Import your provider and PDF generator
 import 'providers/horoscope_provider.dart';
 import 'utils/pdf_generator.dart';
 
@@ -144,7 +142,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(height: 20),
               ElevatedButton(
-                onPressed: () => _generatePDF(provider),
+                onPressed: () => generateProfessionalHoroscopePDF(provider),
                 child: const Text('Generate PDF with Chart'),
               ),
             ],
@@ -152,27 +150,6 @@ class _HomePageState extends State<HomePage> {
         ),
       ),
     );
-  }
-
-  Future<void> _generatePDF(HoroscopeProvider provider) async {
-    final pdf = pw.Document();
-    pdf.addPage(
-      pw.Page(
-        build: (context) => pw.Column(
-          children: [
-            pw.Text('AnoopAstro Light Horoscope', style: const pw.TextStyle(fontSize: 24)),
-            pw.SizedBox(height: 10),
-            pw.Text('City: ${provider.selectedCity}'),
-            pw.Text('Lagna: ${provider.horoscopeData['lagna']}'),
-            pw.Text('Nakshatra: ${provider.horoscopeData['nakshatra']}'),
-            pw.Text('Tithi: ${provider.horoscopeData['tithi']}'),
-            pw.Text('Mahadasha: ${provider.horoscopeData['dasha']['currentMahadasha']['planet']}'),
-            pw.Text('Antardasha: ${provider.horoscopeData['dasha']['antardashas'][0]['planet']}'),
-          ],
-        ),
-      ),
-    );
-    await Printing.layoutPdf(onLayout: (format) async => pdf.save());
   }
 }
 
