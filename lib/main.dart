@@ -1,11 +1,11 @@
-import 'dart:math';
-import 'package:flutter/foundation.dart';
-import 'package:sweph/sweph.dart';
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:sweph/sweph.dart' as sweph;
 
 class HoroscopeProvider extends ChangeNotifier {
   final List<dynamic> cities;
   final String ephemPath;
-  late Sweph sweph;
 
   Map<String, dynamic> horoscopeData = {};
   String selectedCity = '';
@@ -13,7 +13,7 @@ class HoroscopeProvider extends ChangeNotifier {
   double longitude = 0.0;
 
   HoroscopeProvider(this.cities, this.ephemPath) {
-    sweph = Sweph();
+    // Set ephemeris path
     sweph.swe_set_ephe_path(ephemPath);
   }
 
@@ -25,53 +25,50 @@ class HoroscopeProvider extends ChangeNotifier {
   }
 
   Future<void> calculateHoroscope(DateTime birthDate) async {
-    // Julian day
     final jd = sweph.swe_julday(
       birthDate.year,
       birthDate.month,
       birthDate.day,
       birthDate.hour + birthDate.minute / 60.0,
-      Sweph.SE_GREG_CAL,
+      sweph.SE_GREG_CAL,
     );
 
-    // Planet positions
     Map<String, List<double>> planets = {};
     final planetIds = {
-      'Sun': Sweph.SE_SUN,
-      'Moon': Sweph.SE_MOON,
-      'Mercury': Sweph.SE_MERCURY,
-      'Venus': Sweph.SE_VENUS,
-      'Mars': Sweph.SE_MARS,
-      'Jupiter': Sweph.SE_JUPITER,
-      'Saturn': Sweph.SE_SATURN,
-      'Rahu': Sweph.SE_NODE,
-      'Ketu': Sweph.SE_TRUE_NODE,
+      'Sun': sweph.SE_SUN,
+      'Moon': sweph.SE_MOON,
+      'Mercury': sweph.SE_MERCURY,
+      'Venus': sweph.SE_VENUS,
+      'Mars': sweph.SE_MARS,
+      'Jupiter': sweph.SE_JUPITER,
+      'Saturn': sweph.SE_SATURN,
+      'Rahu': sweph.SE_TRUE_NODE,
+      'Ketu': sweph.SE_MEAN_NODE,
     };
 
     for (var entry in planetIds.entries) {
-      planets[entry.key] = sweph.swe_calc_ut(jd, entry.value, Sweph.SEFLG_SWIEPH);
+      final result = sweph.swe_calc_ut(jd, entry.value, sweph.SEFLG_SWIEPH);
+      planets[entry.key] = result.position; // list of [longitude, latitude, distance, speed...]
     }
 
-    // Houses & Ascendant
-    final houses = sweph.swe_houses(jd, latitude, longitude);
-    final ascendant = houses[0][0];
+    final houseResult = sweph.swe_houses(jd, latitude, longitude);
+    final ascendant = houseResult.ascendant;
 
-    // Moon position for Nakshatra and Dasha
     final moonPos = planets['Moon']![0];
     final nakshatra = _getNakshatra(moonPos);
     final tithi = _getTithi(jd);
 
+    // VimshottariDasha calculation
     final dasha = VimshottariDasha.calculate(moonPos, jd);
 
     horoscopeData = {
       'planets': planets,
       'lagna': ascendant,
-      'houses': houses[0],
+      'houses': houseResult.houseCusps,
       'nakshatra': nakshatra,
       'tithi': tithi,
       'dasha': dasha,
     };
-
     notifyListeners();
   }
 
@@ -88,7 +85,7 @@ class HoroscopeProvider extends ChangeNotifier {
   String _getTithi(double jd) => 'Shukla Paksha 5';
 }
 
-// ---------------------- VIMSHOTTARI DASHA ----------------------
+// ---------------------- VIMSHOTTARI DASHAS ----------------------
 class VimshottariDasha {
   static const mahadashaYears = {
     'Ketu': 7,
