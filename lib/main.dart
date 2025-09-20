@@ -1,163 +1,196 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:sweph/sweph.dart' as sweph;
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:provider/provider.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:path_provider/path_provider.dart';
 
-class HoroscopeProvider extends ChangeNotifier {
-  final List<dynamic> cities;
-  final String ephemPath;
+import 'providers/horoscope_provider.dart';
 
-  Map<String, dynamic> horoscopeData = {};
-  String selectedCity = '';
-  double latitude = 0.0;
-  double longitude = 0.0;
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
 
-  HoroscopeProvider(this.cities, this.ephemPath) {
-    // Set ephemeris path
-    sweph.swe_set_ephe_path(ephemPath);
-  }
+  // Load cities.json
+  final citiesJson = await rootBundle.loadString('assets/cities/cities.json');
+  final cities = jsonDecode(citiesJson);
 
-  void setCity(String cityName, double lat, double lon) {
-    selectedCity = cityName;
-    latitude = lat;
-    longitude = lon;
-    notifyListeners();
-  }
+  // Load ephemeris file
+  final ephemPath = await _loadEphemerisFile();
 
-  Future<void> calculateHoroscope(DateTime birthDate) async {
-    final jd = sweph.swe_julday(
-      birthDate.year,
-      birthDate.month,
-      birthDate.day,
-      birthDate.hour + birthDate.minute / 60.0,
-      sweph.SE_GREG_CAL,
-    );
-
-    Map<String, List<double>> planets = {};
-    final planetIds = {
-      'Sun': sweph.SE_SUN,
-      'Moon': sweph.SE_MOON,
-      'Mercury': sweph.SE_MERCURY,
-      'Venus': sweph.SE_VENUS,
-      'Mars': sweph.SE_MARS,
-      'Jupiter': sweph.SE_JUPITER,
-      'Saturn': sweph.SE_SATURN,
-      'Rahu': sweph.SE_TRUE_NODE,
-      'Ketu': sweph.SE_MEAN_NODE,
-    };
-
-    for (var entry in planetIds.entries) {
-      final result = sweph.swe_calc_ut(jd, entry.value, sweph.SEFLG_SWIEPH);
-      planets[entry.key] = result.position; // list of [longitude, latitude, distance, speed...]
-    }
-
-    final houseResult = sweph.swe_houses(jd, latitude, longitude);
-    final ascendant = houseResult.ascendant;
-
-    final moonPos = planets['Moon']![0];
-    final nakshatra = _getNakshatra(moonPos);
-    final tithi = _getTithi(jd);
-
-    // VimshottariDasha calculation
-    final dasha = VimshottariDasha.calculate(moonPos, jd);
-
-    horoscopeData = {
-      'planets': planets,
-      'lagna': ascendant,
-      'houses': houseResult.houseCusps,
-      'nakshatra': nakshatra,
-      'tithi': tithi,
-      'dasha': dasha,
-    };
-    notifyListeners();
-  }
-
-  String _getNakshatra(double moonLongitude) {
-    final nakshatras = [
-      'Ashwini','Bharani','Krittika','Rohini','Mrigashirsha','Ardra','Punarvasu','Pushya','Ashlesha','Magha',
-      'Purva Phalguni','Uttara Phalguni','Hasta','Chitra','Swati','Vishakha','Anuradha','Jyeshtha','Mula',
-      'Purva Ashadha','Uttara Ashadha','Shravana','Dhanishta','Shatabhisha','Purva Bhadrapada','Uttara Bhadrapada','Revati'
-    ];
-    final index = ((moonLongitude / 13.3333333).floor()) % 27;
-    return nakshatras[index];
-  }
-
-  String _getTithi(double jd) => 'Shukla Paksha 5';
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider<HoroscopeProvider>(
+          create: (_) => HoroscopeProvider(cities, ephemPath),
+        ),
+      ],
+      child: const AnoopAstroApp(),
+    ),
+  );
 }
 
-// ---------------------- VIMSHOTTARI DASHAS ----------------------
-class VimshottariDasha {
-  static const mahadashaYears = {
-    'Ketu': 7,
-    'Venus': 20,
-    'Sun': 6,
-    'Moon': 10,
-    'Mars': 7,
-    'Rahu': 18,
-    'Jupiter': 16,
-    'Saturn': 19,
-    'Mercury': 17,
-  };
+Future<String> _loadEphemerisFile() async {
+  final byteData = await rootBundle.load('assets/ephem/ephem_1950_2050.dat');
+  final tempDir = await getTemporaryDirectory();
+  final file = File('${tempDir.path}/ephem_1950_2050.dat');
+  await file.writeAsBytes(byteData.buffer.asUint8List());
+  return file.path;
+}
 
-  static const nakshatraSequence = [
-    'Ketu', 'Venus', 'Sun', 'Moon', 'Mars', 'Rahu', 'Jupiter', 'Saturn', 'Mercury'
-  ];
+class AnoopAstroApp extends StatelessWidget {
+  const AnoopAstroApp({Key? key}) : super(key: key);
 
-  static Map<String, dynamic> calculate(double moonLongitude, double jdBirth) {
-    final nakshatraIndex = (moonLongitude / 13.3333333).floor() % 27;
-    final remainingFraction = (13.3333333 - (moonLongitude % 13.3333333)) / 13.3333333;
-    int dashaStartIndex = nakshatraIndex % 9;
-
-    final List<Map<String, dynamic>> dashaPeriods = [];
-    double jdStart = jdBirth;
-
-    for (int i = 0; i < 9; i++) {
-      final planet = nakshatraSequence[(dashaStartIndex + i) % 9];
-      double years = mahadashaYears[planet]!.toDouble();
-      if (i == 0) years *= remainingFraction;
-      double jdEnd = jdStart + years * 365.25;
-      dashaPeriods.add({
-        'planet': planet,
-        'startJD': jdStart,
-        'endJD': jdEnd,
-        'years': years,
-      });
-      jdStart = jdEnd;
-    }
-
-    final currentDasha = dashaPeriods.firstWhere(
-        (d) => jdBirth >= d['startJD'] && jdBirth <= d['endJD'],
-        orElse: () => dashaPeriods[0]);
-
-    final antardashas = _calculateAntardasha(currentDasha);
-
-    return {
-      'mahadashas': dashaPeriods,
-      'currentMahadasha': currentDasha,
-      'antardashas': antardashas,
-    };
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AnoopAstro Light',
+      theme: ThemeData(
+        primarySwatch: Colors.deepPurple,
+        textTheme: GoogleFonts.notoSansTextTheme(),
+      ),
+      supportedLocales: const [
+        Locale('en', ''),
+        Locale('hi', ''),
+      ],
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      home: const HomePage(),
+    );
   }
+}
 
-  static List<Map<String, dynamic>> _calculateAntardasha(Map<String, dynamic> mahadasha) {
-    final planet = mahadasha['planet'] as String;
-    final totalYears = mahadasha['years'] as double;
+class HomePage extends StatefulWidget {
+  const HomePage({Key? key}) : super(key: key);
 
-    final fractions = [7, 20, 6, 10, 7, 18, 16, 19, 17];
-    final totalFraction = fractions.reduce((a, b) => a + b);
-    List<Map<String, dynamic>> antardasha = [];
-    double jdStart = mahadasha['startJD'];
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
 
-    for (int i = 0; i < 9; i++) {
-      double fractionYears = totalYears * (fractions[i] / totalFraction);
-      double jdEnd = jdStart + fractionYears * 365.25;
-      antardasha.add({
-        'planet': nakshatraSequence[i],
-        'startJD': jdStart,
-        'endJD': jdEnd,
-        'years': fractionYears,
-      });
-      jdStart = jdEnd;
-    }
-    return antardasha;
+class _HomePageState extends State<HomePage> {
+  String? selectedCity;
+  double? latitude;
+  double? longitude;
+  DateTime birthDate = DateTime(2000, 1, 1, 12, 0);
+
+  @override
+  Widget build(BuildContext context) {
+    final provider = Provider.of<HoroscopeProvider>(context);
+
+    return Scaffold(
+      appBar: AppBar(title: const Text('AnoopAstro Light')),
+      body: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // City Dropdown
+            DropdownButtonFormField<String>(
+              decoration: const InputDecoration(labelText: 'Select City'),
+              value: selectedCity,
+              items: provider.cities.map<DropdownMenuItem<String>>((city) {
+                return DropdownMenuItem<String>(
+                  value: city['name'],
+                  child: Text(city['name']),
+                );
+              }).toList(),
+              onChanged: (value) {
+                final city = provider.cities.firstWhere((c) => c['name'] == value);
+                setState(() {
+                  selectedCity = value;
+                  latitude = city['latitude'];
+                  longitude = city['longitude'];
+                  provider.setCity(value!, latitude!, longitude!);
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            // Birth Date Picker
+            Row(
+              children: [
+                Expanded(
+                  child: Text('Birth Date: ${birthDate.toLocal()}'.split('.')[0]),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: birthDate,
+                      firstDate: DateTime(1900),
+                      lastDate: DateTime.now(),
+                    );
+                    if (picked != null) {
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(hour: birthDate.hour, minute: birthDate.minute),
+                      );
+                      if (time != null) {
+                        setState(() {
+                          birthDate = DateTime(picked.year, picked.month, picked.day, time.hour, time.minute);
+                        });
+                      }
+                    }
+                  },
+                  child: const Text('Select Date & Time'),
+                )
+              ],
+            ),
+            const SizedBox(height: 16),
+            // Calculate Horoscope Button
+            ElevatedButton(
+              onPressed: () async {
+                if (selectedCity != null) {
+                  await provider.calculateHoroscope(birthDate);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Horoscope Calculated!')),
+                  );
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Please select a city!')),
+                  );
+                }
+              },
+              child: const Text('Calculate Horoscope'),
+            ),
+            const SizedBox(height: 16),
+            // Horoscope Display
+            Expanded(
+              child: SingleChildScrollView(
+                child: provider.horoscopeData.isEmpty
+                    ? const Text('No data yet')
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Lagna: ${provider.horoscopeData['lagna'] ?? ''}'),
+                          const SizedBox(height: 8),
+                          Text('Nakshatra: ${provider.horoscopeData['nakshatra'] ?? ''}'),
+                          const SizedBox(height: 8),
+                          Text('Tithi: ${provider.horoscopeData['tithi'] ?? ''}'),
+                          const SizedBox(height: 8),
+                          const Text('Planets:'),
+                          ...((provider.horoscopeData['planets'] as Map<String, dynamic>).entries.map(
+                            (e) => Text('${e.key}: ${e.value[0].toStringAsFixed(2)}°'),
+                          )),
+                        ],
+                      ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: () {
+                // TODO: Call PDF generation
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('PDF generation not implemented yet')),
+                );
+              },
+              child: const Text('Generate PDF'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
