@@ -1,4 +1,6 @@
+// lib/utils/pdf_generator.dart
 import 'package:pdf/widgets.dart' as pw;
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import '../providers/horoscope_provider.dart';
 import 'dart:math';
@@ -6,86 +8,78 @@ import 'dart:math';
 Future<void> generateProfessionalHoroscopePDF(HoroscopeProvider provider) async {
   final pdf = pw.Document();
 
-  final houses = provider.horoscopeData['houses'] as List<dynamic>? ?? [];
-  final planets = provider.horoscopeData['planets'] as Map<String, List<double>>? ?? {};
+  final planets = provider.horoscopeData['planets'] as Map<String, List<double>>;
+  final houses = provider.horoscopeData['houses'] as List<dynamic>;
+  final lagna = provider.horoscopeData['lagna'];
+  final nakshatra = provider.horoscopeData['nakshatra'];
+  final tithi = provider.horoscopeData['tithi'];
+  final currentMahadasha = provider.horoscopeData['dasha']['currentMahadasha']['planet'];
+  final antardasha = provider.horoscopeData['dasha']['antardashas'][0]['planet'];
 
   pdf.addPage(
     pw.Page(
+      pageFormat: PdfPageFormat.a4,
       build: (context) => pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: [
-          pw.Text('AnoopAstro Light Horoscope', style: const pw.TextStyle(fontSize: 24)),
+          pw.Text('AnoopAstro Light Horoscope', style: pw.TextStyle(fontSize: 24)),
           pw.SizedBox(height: 10),
           pw.Text('City: ${provider.selectedCity}'),
-          pw.Text('Lagna: ${provider.horoscopeData['lagna']}'),
-          pw.Text('Nakshatra: ${provider.horoscopeData['nakshatra']}'),
-          pw.Text('Tithi: ${provider.horoscopeData['tithi']}'),
-          pw.Text('Mahadasha: ${provider.horoscopeData['dasha']['currentMahadasha']['planet']}'),
-          pw.Text('Antardasha: ${provider.horoscopeData['dasha']['antardashas'][0]['planet']}'),
+          pw.Text('Lagna: $lagna'),
+          pw.Text('Nakshatra: $nakshatra'),
+          pw.Text('Tithi: $tithi'),
+          pw.Text('Mahadasha: $currentMahadasha'),
+          pw.Text('Antardasha: $antardasha'),
           pw.SizedBox(height: 20),
-          // Chart
-          pw.Container(
-            width: 300,
-            height: 300,
-            child: pw.CustomPaint(
-              painter: _PDFChakraPainter(houses, planets),
-            ),
-          ),
+          pw.Center(child: _buildChakraChart(houses, planets)),
         ],
       ),
     ),
   );
 
-  await Printing.layoutPdf(
-    onLayout: (format) async => pdf.save(),
-  );
+  await Printing.layoutPdf(onLayout: (format) => pdf.save());
 }
 
-// ---------------------- PDF Chakra Painter ----------------------
-class _PDFChakraPainter extends pw.CustomPainter {
-  final List<dynamic> houses;
-  final Map<String, List<double>> planets;
+/// Builds a 16-house circular chart with planets
+pw.Widget _buildChakraChart(List<dynamic> houses, Map<String, List<double>> planets) {
+  return pw.Container(
+    width: 300,
+    height: 300,
+    child: pw.CustomPaint(
+      size: const PdfPoint(300, 300),
+      painter: (PdfGraphics canvas, PdfPoint size) {
+        final centerX = size.x / 2;
+        final centerY = size.y / 2;
+        final radius = size.x / 2 - 10;
 
-  _PDFChakraPainter(this.houses, this.planets);
+        // Draw circle
+        canvas.setStrokeColor(PdfColors.deepPurple);
+        canvas.setLineWidth(2);
+        canvas.drawCircle(centerX, centerY, radius);
+        canvas.strokePath();
 
-  @override
-  void paint(pw.Context context, pw.Canvas canvas, pw.Size size) {
-    final paint = pw.Paint()
-      ..color = PdfColors.deepPurple
-      ..strokeWidth = 2
-      ..style = pw.PaintingStyle.stroke;
+        // Draw 16-house lines
+        for (int i = 0; i < 16; i++) {
+          final angle = 2 * pi / 16 * i - pi / 2;
+          final x = centerX + radius * cos(angle);
+          final y = centerY + radius * sin(angle);
+          canvas.moveTo(centerX, centerY);
+          canvas.lineTo(x, y);
+          canvas.strokePath();
+        }
 
-    final center = pw.Offset(size.width / 2, size.height / 2);
-    final radius = size.width / 2 - 10;
+        // Draw planet positions
+        final planetNames = planets.keys.toList();
+        for (int i = 0; i < planetNames.length; i++) {
+          final planet = planetNames[i];
+          final angle = 2 * pi / planetNames.length * i - pi / 2;
+          final px = centerX + (radius - 20) * cos(angle);
+          final py = centerY + (radius - 20) * sin(angle);
 
-    // Draw outer circle
-    canvas.drawCircle(center, radius, paint);
-
-    // Draw 16 house lines
-    for (int i = 0; i < 16; i++) {
-      final angle = 2 * pi / 16 * i;
-      final x = center.dx + radius * cos(angle);
-      final y = center.dy + radius * sin(angle);
-      canvas.drawLine(center, pw.Offset(x, y), paint);
-    }
-
-    // Draw planets inside the chart
-    final textPainter = pw.TextPainter();
-    planets.forEach((name, pos) {
-      final longitude = pos[0]; // ecliptic longitude
-      final angle = (longitude / 360) * 2 * pi - pi / 2;
-      final px = center.dx + (radius - 30) * cos(angle);
-      final py = center.dy + (radius - 30) * sin(angle);
-
-      textPainter.text = pw.TextSpan(
-        text: name,
-        style: pw.TextStyle(fontSize: 10, color: PdfColors.black),
-      );
-      textPainter.layout();
-      textPainter.paint(canvas, pw.Offset(px - textPainter.width / 2, py - textPainter.height / 2));
-    });
-  }
-
-  @override
-  bool shouldRepaint(covariant pw.CustomPainter oldDelegate) => false;
+          canvas.setFillColor(PdfColors.black);
+          canvas.drawString(pw.Font.helvetica(), 10, planet, px, py);
+        }
+      },
+    ),
+  );
 }
