@@ -1,0 +1,642 @@
+steps:
+  - name: Checkout
+    uses: actions/checkout@v4
+
+  - name: Setup Java (JDK 17)
+    uses: actions/setup-java@v4
+    with:
+      distribution: 'temurin'
+      java-version: '17'
+
+  - name: Setup Flutter (stable)
+    uses: subosito/flutter-action@v2
+    with:
+      channel: 'stable'
+
+  - name: Create Flutter app and inject AnoopAstro code (Hindi UI + offline city search)
+    run: |
+      set -e
+      flutter --version
+      # Create app skeleton
+      flutter create app --project-name anoopastro --org com.anoopastro
+      rm -f app/lib/main.dart app/pubspec.yaml
+      mkdir -p app/assets
+
+      # pubspec.yaml
+      cat > app/pubspec.yaml << 'YAML'
+      name: anoopastro
+      description: Offline Hindi UI with AstroSage-like form and offline city autocomplete
+      publish_to: "none"
+      version: 1.0.0+1
+
+      environment:
+        sdk: ">=3.2.0 <4.0.0"
+
+      dependencies:
+        flutter:
+          sdk: flutter
+        cupertino_icons: ^1.0.6
+        intl: ^0.19.0
+        flutter_localizations:
+          sdk: flutter
+
+      dev_dependencies:
+        flutter_test:
+          sdk: flutter
+        flutter_lints: ^4.0.0
+
+      flutter:
+        uses-material-design: true
+
+        assets:
+          - assets/cities.json
+      YAML
+
+      # main.dart (Hindi UI + offline city autocomplete with highlight)
+      cat > app/lib/main.dart << 'DART'
+      import 'dart:async';
+      import 'dart:convert';
+      import 'package:flutter/material.dart';
+      import 'package:flutter/services.dart' show rootBundle;
+      import 'package:intl/intl.dart';
+      import 'package:flutter_localizations/flutter_localizations.dart';
+
+      const brandPrimary = Color(0xFF6A1B9A); // Purple
+      const brandGold = Color(0xFFFFC107);    // Gold
+      const appBrand = 'AnoopAstro';
+
+      void main() {
+        WidgetsFlutterBinding.ensureInitialized();
+        runApp(const AnoopAstroApp());
+      }
+
+      class AnoopAstroApp extends StatelessWidget {
+        const AnoopAstroApp({super.key});
+        @override
+        Widget build(BuildContext context) {
+          return MaterialApp(
+            title: appBrand,
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(seedColor: brandPrimary).copyWith(secondary: brandGold),
+              fontFamily: 'Roboto',
+            ),
+            locale: const Locale('hi'),
+            supportedLocales: const [Locale('hi'), Locale('en')],
+            localizationsDelegates: const [
+              GlobalMaterialLocalizations.delegate,
+              GlobalWidgetsLocalizations.delegate,
+              GlobalCupertinoLocalizations.delegate,
+            ],
+            home: const HomeScreen(),
+          );
+        }
+      }
+
+      class HomeScreen extends StatefulWidget {
+        const HomeScreen({super.key});
+        @override
+        State<HomeScreen> createState() => _HomeScreenState();
+      }
+
+      class _HomeScreenState extends State<HomeScreen> {
+        late Future<CityIndex> _cityIndexF;
+        @override
+        void initState() {
+          super.initState();
+          _cityIndexF = CityIndex.loadFromAsset('assets/cities.json');
+        }
+
+        @override
+        Widget build(BuildContext context) {
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text(appBrand, style: TextStyle(color: Colors.white)),
+              backgroundColor: brandPrimary,
+            ),
+            body: FutureBuilder<CityIndex>(
+              future: _cityIndexF,
+              builder: (context, snap) {
+                if (snap.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
+                if (!snap.hasData || snap.hasError) {
+                  return const Center(child: Text('शहर सूची लोड करने में समस्या हुई। कृपया assets/cities.json जाँचें।'));
+                }
+                return KundaliInputForm(cityIndex: snap.data!);
+              },
+            ),
+          );
+        }
+      }
+
+      class KundaliInputForm extends StatefulWidget {
+        const KundaliInputForm({super.key, required this.cityIndex});
+        final CityIndex cityIndex;
+
+        @override
+        State<KundaliInputForm> createState() => _KundaliInputFormState();
+      }
+
+      class _KundaliInputFormState extends State<KundaliInputForm> {
+        final _nameCtrl = TextEditingController();
+        final _cityCtrl = TextEditingController();
+        DateTime? _date;
+        TimeOfDay? _time;
+        CityEntry? _selectedCity;
+        List<CityEntry> _suggestions = [];
+        Timer? _debounce;
+
+        @override
+        void dispose() {
+          _nameCtrl.dispose();
+          _cityCtrl.dispose();
+          _debounce?.cancel();
+          super.dispose();
+        }
+
+        void _onCityChanged(String text) {
+          _debounce?.cancel();
+          _debounce = Timer(const Duration(milliseconds: 150), () {
+            final q = text.trim();
+            if (q.isEmpty) {
+              setState(() => _suggestions = []);
+              return;
+            }
+            final results = widget.cityIndex.search(q, limit: 20);
+            setState(() => _suggestions = results);
+          });
+        }
+
+        Future<void> _pickDate() async {
+          final now = DateTime.now();
+          final d = await showDatePicker(
+            context: context,
+            firstDate: DateTime(1900),
+            lastDate: DateTime(now.year + 1),
+            initialDate: _date ?? now,
+            helpText: 'जन्म तिथि चुनें',
+          );
+          if (d != null) setState(() => _date = d);
+        }
+
+        Future<void> _pickTime() async {
+          final t = await showTimePicker(
+            context: context,
+            initialTime: _time ?? TimeOfDay.now(),
+            helpText: 'जन्म समय चुनें',
+          );
+          if (t != null) setState(() => _time = t);
+        }
+
+        bool get _ready =>
+            _nameCtrl.text.trim().isNotEmpty &&
+            _date != null && _time != null &&
+            _selectedCity != null;
+
+        TextSpan _highlightText(String text, String query, {TextStyle? normal, TextStyle? highlight}) {
+          final base = normal ?? const TextStyle(color: Colors.black87);
+          final hi = highlight ?? const TextStyle(color: brandPrimary, fontWeight: FontWeight.w600);
+          final q = query.trim();
+          if (q.isEmpty) return TextSpan(text: text, style: base);
+          final toks = q.split(RegExp(r'\s+')).where((e) => e.isNotEmpty).toList();
+          if (toks.isEmpty) return TextSpan(text: text, style: base);
+          final pattern = RegExp('(${toks.map(RegExp.escape).join('|')})', caseSensitive: false, unicode: true);
+          final spans = <TextSpan>[];
+          int start = 0;
+          for (final m in pattern.allMatches(text)) {
+            if (m.start > start) spans.add(TextSpan(text: text.substring(start, m.start), style: base));
+            spans.add(TextSpan(text: text.substring(m.start, m.end), style: hi));
+            start = m.end;
+          }
+          if (start < text.length) spans.add(TextSpan(text: text.substring(start), style: base));
+          return TextSpan(children: spans);
+        }
+
+        String _firstAltMatch(CityEntry c, String query) {
+          final q = query.toLowerCase().trim();
+          if (q.isEmpty) return '';
+          for (final a in c.alt) {
+            if (a.toLowerCase().contains(q)) return a;
+          }
+          return '';
+        }
+
+        @override
+        Widget build(BuildContext context) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              Card(
+                elevation: 1,
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('कुंडली हेतु विवरण', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _nameCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'नाम',
+                          prefixIcon: Icon(Icons.person_outline),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _pickDate,
+                              icon: const Icon(Icons.calendar_today),
+                              label: Text(_date == null
+                                  ? 'जन्म तिथि'
+                                  : DateFormat('dd MMM yyyy', 'hi').format(_date!)),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _pickTime,
+                              icon: const Icon(Icons.access_time),
+                              label: Text(_time == null ? 'जन्म समय' : _time!.format(context)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _cityCtrl,
+                        decoration: const InputDecoration(
+                          labelText: 'जन्म स्थान (शहर, राज्य)',
+                          prefixIcon: Icon(Icons.location_city),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: _onCityChanged,
+                      ),
+                      const SizedBox(height: 6),
+                      if (_suggestions.isNotEmpty)
+                        Card(
+                          color: Colors.white,
+                          surfaceTintColor: Colors.white,
+                          elevation: 2,
+                          child: ListView.separated(
+                            itemCount: _suggestions.length,
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            separatorBuilder: (_, __) => const Divider(height: 1),
+                            itemBuilder: (ctx, i) {
+                              final c = _suggestions[i];
+                              final q = _cityCtrl.text.trim();
+                              final titleText = '${c.name}${c.state.isNotEmpty ? ', ${c.state}' : ''}';
+                              final altHit = _firstAltMatch(c, q);
+                              return ListTile(
+                                dense: true,
+                                leading: const Icon(Icons.place_outlined, color: brandPrimary),
+                                title: RichText(
+                                  text: _highlightText(titleText, q),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                subtitle: altHit.isNotEmpty
+                                    ? RichText(
+                                        text: _highlightText('उर्फ: $altHit', q,
+                                            normal: const TextStyle(color: Colors.black54),
+                                            highlight: const TextStyle(color: brandGold, fontWeight: FontWeight.w700)),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      )
+                                    : Text(
+                                        '${c.lat.toStringAsFixed(4)}, ${c.lon.toStringAsFixed(4)}${c.tz.isNotEmpty ? ' • ${c.tz}' : ''}',
+                                        style: const TextStyle(color: Colors.black54),
+                                      ),
+                                onTap: () {
+                                  setState(() {
+                                    _selectedCity = c;
+                                    _cityCtrl.text = titleText;
+                                    _suggestions = [];
+                                  });
+                                },
+                              );
+                            },
+                          ),
+                        ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton.icon(
+                          style: FilledButton.styleFrom(backgroundColor: brandPrimary, foregroundColor: Colors.white),
+                          onPressed: _ready ? _onShowKundali : null,
+                          icon: const Icon(Icons.auto_fix_high),
+                          label: const Text('कुंडली दिखाइये'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              _selectedCity == null
+                  ? const SizedBox.shrink()
+                  : Card(
+                      elevation: 0,
+                      color: brandPrimary.withOpacity(0.05),
+                      child: Padding(
+                        padding: const EdgeInsets.all(12),
+                        child: Text(
+                          'चयनित स्थान: ${_selectedCity!.name}${_selectedCity!.state.isNotEmpty ? ', ${_selectedCity!.state}' : ''}\n'
+                          'निर्देशांक: ${_selectedCity!.lat.toStringAsFixed(4)}, ${_selectedCity!.lon.toStringAsFixed(4)}'
+                          '${_selectedCity!.tz.isNotEmpty ? '\nटाइमज़ोन: ${_selectedCity!.tz}' : ''}',
+                        ),
+                      ),
+                    ),
+            ],
+          );
+        }
+
+        void _onShowKundali() {
+          final dt = DateTime(_date!.year, _date!.month, _date!.day, _time!.hour, _time!.minute);
+          Navigator.of(context).push(MaterialPageRoute(
+            builder: (_) => ResultScreen(
+              name: _nameCtrl.text.trim(),
+              datetime: dt,
+              city: _selectedCity!,
+            ),
+          ));
+        }
+      }
+
+      class ResultScreen extends StatelessWidget {
+        const ResultScreen({super.key, required this.name, required this.datetime, required this.city});
+        final String name;
+        final DateTime datetime;
+        final CityEntry city;
+
+        @override
+        Widget build(BuildContext context) {
+          final df = DateFormat('dd MMM yyyy, HH:mm', 'hi');
+          return Scaffold(
+            appBar: AppBar(
+              title: const Text('कुंडली परिणाम', style: TextStyle(color: Colors.white)),
+              backgroundColor: brandPrimary,
+            ),
+            body: ListView(
+              padding: const EdgeInsets.all(16),
+              children: [
+                Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('जन्म विवरण', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                        const SizedBox(height: 8),
+                        Text('नाम: $name'),
+                        Text('जन्म: ${df.format(datetime)}'),
+                        Text('स्थान: ${city.name}${city.state.isNotEmpty ? ', ${city.state}' : ''}'),
+                        Text('निर्देशांक: ${city.lat.toStringAsFixed(4)}, ${city.lon.toStringAsFixed(4)}'),
+                        if (city.tz.isNotEmpty) Text('टाइमज़ोन: ${city.tz}'),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Card(
+                  color: brandPrimary.withOpacity(0.04),
+                  child: const Padding(
+                    padding: EdgeInsets.all(14),
+                    child: Text('यह ऑफलाइन डेमो UI है। आगे D1/D9 चार्ट, दशाएं और PDF एक्सपोर्ट जोड़ सकते हैं — सब कुछ ऑफलाइन.'),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+      }
+
+      /* -------------------- Offline Cities Index (FAST + Hindi-first + Highlight-ready) -------------------- */
+
+      class CityEntry {
+        final String name;
+        final String state;
+        final double lat;
+        final double lon;
+        final String tz;
+        final int population;
+        final List<String> alt;
+
+        CityEntry({
+          required this.name,
+          required this.state,
+          required this.lat,
+          required this.lon,
+          required this.tz,
+          required this.population,
+          required this.alt,
+        });
+
+        factory CityEntry.fromJson(Map<String, dynamic> j) {
+          List<String> alt = [];
+          final altRaw = j['alt'] ?? j['alt_names'] ?? [];
+          if (altRaw is List) {
+            alt = altRaw.map((e) => (e ?? '').toString()).where((s) => s.isNotEmpty).toList();
+          } else if (altRaw is String) {
+            alt = altRaw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty).toList();
+          }
+          return CityEntry(
+            name: (j['name'] ?? '').toString(),
+            state: (j['state'] ?? j['admin1'] ?? '').toString(),
+            lat: (j['lat'] is num) ? (j['lat'] as num).toDouble() : double.tryParse('${j['lat']}') ?? 0.0,
+            lon: (j['lon'] is num) ? (j['lon'] as num).toDouble() : double.tryParse('${j['lon']}') ?? 0.0,
+            tz: (j['tz'] ?? j['timezone'] ?? '').toString(),
+            population: (j['population'] is num) ? (j['population'] as num).toInt() : int.tryParse('${j['population'] ?? 0}') ?? 0,
+            alt: alt,
+          );
+        }
+      }
+
+      class CityIndex {
+        CityIndex._(this._cities, this._keys, this._tokens, this._triIndex, this._maxPop);
+
+        final List<CityEntry> _cities;
+        final List<String> _keys;
+        final List<List<String>> _tokens;
+        final Map<String, List<int>> _triIndex;
+        final int _maxPop;
+
+        static Future<CityIndex> loadFromAsset(String asset) async {
+          try {
+            final s = await rootBundle.loadString(asset);
+            final List<dynamic> arr = json.decode(s);
+            final cities = arr.map((e) => CityEntry.fromJson(e as Map<String, dynamic>)).toList();
+            return _buildIndexed(cities);
+          } catch (_) {
+            final cities = <CityEntry>[
+              CityEntry(name: 'Delhi', state: 'Delhi', lat: 28.6139, lon: 77.2090, tz: 'Asia/Kolkata', population: 16787941, alt: ['दिल्ली', 'New Delhi']),
+              CityEntry(name: 'Mumbai', state: 'Maharashtra', lat: 19.0760, lon: 72.8777, tz: 'Asia/Kolkata', population: 12442373, alt: ['मुंबई', 'Bombay']),
+              CityEntry(name: 'Kolkata', state: 'West Bengal', lat: 22.5726, lon: 88.3639, tz: 'Asia/Kolkata', population: 4486679, alt: ['कोलकाता', 'Calcutta']),
+              CityEntry(name: 'Jaipur', state: 'Rajasthan', lat: 26.9124, lon: 75.7873, tz: 'Asia/Kolkata', population: 3073350, alt: ['जयपुर']),
+            ];
+            return _buildIndexed(cities);
+          }
+        }
+
+        static CityIndex _buildIndexed(List<CityEntry> cities) {
+          final keys = <String>[];
+          final tokens = <List<String>>[];
+          int maxPop = 1;
+          for (final c in cities) {
+            if (c.population > maxPop) maxPop = c.population;
+            final key = _normalize('${c.name} ${c.state} ${c.alt.join(" ")}');
+            keys.add(key);
+            tokens.add(_tokenize(key));
+          }
+          final triIndex = <String, List<int>>{};
+          for (int i = 0; i < cities.length; i++) {
+            final toks = tokens[i];
+            final seen = <String>{};
+            for (final t in toks) {
+              if (t.isEmpty) continue;
+              for (final tri in _trigramsOf(t)) {
+                if (seen.add(tri)) {
+                  (triIndex[tri] ??= <int>[]).add(i);
+                }
+              }
+            }
+          }
+          return CityIndex._(cities, keys, tokens, triIndex, maxPop);
+        }
+
+        List<CityEntry> search(String q, {int limit = 20}) {
+          final query = _normalize(q);
+          if (query.isEmpty) return [];
+          if (query.length < 3) {
+            final results = <({int id, double score})>[];
+            for (int i = 0; i < _cities.length; i++) {
+              final key = _keys[i];
+              final toks = _tokens[i];
+              final sw = _anyStartsWith(toks, query);
+              final contains = key.contains(query);
+              if (!sw && !contains) continue;
+              final popW = _cities[i].population / (_maxPop == 0 ? 1 : _maxPop);
+              final hindiBoost = _hasDevanagari(key) ? 0.8 : 0.0;
+              final score = (sw ? 3.0 : 0.0) + (contains ? 1.6 : 0.0) + popW + hindiBoost;
+              results.add((id: i, score: score));
+            }
+            results.sort((a, b) => b.score.compareTo(a.score));
+            return results.take(limit).map((r) => _cities[r.id]).toList();
+          }
+
+          final qTris = _trigramsOf(query);
+          if (qTris.isEmpty) return [];
+          final counts = <int, int>{};
+          int triTotal = 0;
+          for (final tri in qTris) {
+            final ids = _triIndex[tri];
+            if (ids == null) continue;
+            triTotal++;
+            for (final id in ids) {
+              counts[id] = (counts[id] ?? 0) + 1;
+            }
+          }
+          if (counts.isEmpty) return [];
+          final scored = <({int id, double score, int hits})>[];
+          counts.forEach((id, hits) {
+            final key = _keys[id];
+            final toks = _tokens[id];
+            final sw = _anyStartsWith(toks, query);
+            final contains = key.contains(query);
+            final coverage = triTotal == 0 ? 0.0 : (hits / triTotal);
+            final popW = _cities[id].population / (_maxPop == 0 ? 1 : _maxPop);
+            final hindiBoost = _hasDevanagari(key) ? 0.8 : 0.0;
+            final score = (sw ? 5.0 : 0.0) + (contains ? 2.0 : 0.0) + (coverage * 3.0) + (popW * 1.5) + hindiBoost;
+            scored.add((id: id, score: score, hits: hits));
+          });
+          scored.sort((a, b) {
+            final c = b.score.compareTo(a.score);
+            if (c != 0) return c;
+            final h = b.hits.compareTo(a.hits);
+            if (h != 0) return h;
+            final p = _cities[b.id].population.compareTo(_cities[a.id].population);
+            if (p != 0) return p;
+            return _cities[a.id].name.compareTo(_cities[b.id].name);
+          });
+          return scored.take(limit).map((e) => _cities[e.id]).toList();
+        }
+
+        static String _normalize(String s) {
+          String x = s.toLowerCase();
+          x = x.replaceAll(RegExp(r'[_\.,/\\\-]+'), ' ');
+          x = x.replaceAll(RegExp(r'[^a-z0-9\u0900-\u097F\s]+'), ' ');
+          x = x.replaceAll(RegExp(r'\s+'), ' ').trim();
+          return x;
+        }
+
+        static List<String> _tokenize(String key) {
+          if (key.isEmpty) return const [];
+          return key.split(' ').where((t) => t.isNotEmpty).toList();
+        }
+
+        static Set<String> _trigramsOf(String token) {
+          final tris = <String>{};
+          if (token.length <= 2) {
+            tris.add(token);
+            return tris;
+          }
+          for (int i = 0; i <= token.length - 3; i++) {
+            tris.add(token.substring(i, i + 3));
+          }
+          return tris;
+        }
+
+        static bool _anyStartsWith(List<String> toks, String q) {
+          for (final t in toks) {
+            if (t.startsWith(q)) return true;
+          }
+          return false;
+        }
+
+        static bool _hasDevanagari(String s) => RegExp(r'[\u0900-\u097F]').hasMatch(s);
+      }
+      DART
+
+      # Use user's cities.json if provided; else write a tiny sample so build always succeeds
+      if [ -f assets/cities.json ]; then
+        echo "Using repo assets/cities.json"
+        cp assets/cities.json app/assets/cities.json
+      else
+        echo "Adding tiny sample assets/cities.json"
+        cat > app/assets/cities.json << 'JSON'
+        [
+          { "name": "Delhi", "state": "Delhi", "lat": 28.6139, "lon": 77.2090, "tz": "Asia/Kolkata", "population": 16787941, "alt": ["दिल्ली", "New Delhi"] },
+          { "name": "Mumbai", "state": "Maharashtra", "lat": 19.0760, "lon": 72.8777, "tz": "Asia/Kolkata", "population": 12442373, "alt": ["मुंबई", "Bombay"] },
+          { "name": "Kolkata", "state": "West Bengal", "lat": 22.5726, "lon": 88.3639, "tz": "Asia/Kolkata", "population": 4486679, "alt": ["कोलकाता", "Calcutta"] },
+          { "name": "Chennai", "state": "Tamil Nadu", "lat": 13.0827, "lon": 80.2707, "tz": "Asia/Kolkata", "population": 4646732, "alt": ["चेन्नई", "Madras"] },
+          { "name": "Jaipur", "state": "Rajasthan", "lat": 26.9124, "lon": 75.7873, "tz": "Asia/Kolkata", "population": 3073350, "alt": ["जयपुर"] }
+        ]
+        JSON
+      fi
+
+  - name: Get dependencies
+    working-directory: app
+    run: flutter pub get
+
+  - name: Build APK (debug)  # debug = installable without signing
+    working-directory: app
+    run: flutter build apk --debug
+
+  - name: Zip project source
+    run: |
+      cd app
+      zip -qr ../AnoopAstro-source.zip .
+
+  - name: Upload APK and Source ZIP
+    uses: actions/upload-artifact@v4
+    with:
+      name: AnoopAstro-artifacts
+      path: |
+        app/build/app/outputs/flutter-apk/app-debug.apk
+        AnoopAstro-source.zip
